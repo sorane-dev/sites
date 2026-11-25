@@ -6,37 +6,36 @@ Auto-generated from `stats/history.jsonl` on each CI run on `main`.
 
 | Field | Value |
 |-------|-------|
-| Timestamp | 2026-11-25T07:25:37.518Z |
-| Commit | `019275e` |
+| Timestamp | 2026-11-25T08:36:47.219Z |
+| Commit | `4b771da` |
 | Version | `0.5.0` |
-| Packages LOC | 23,390 |
-| Test functions | 654 |
-| Total LOC | 45,061 |
-| Line coverage | 91.0% |
+| Packages LOC | 23,763 |
+| Test functions | 658 |
+| Total LOC | 45,613 |
+| Line coverage | 90.8% |
 
 ## Δ vs previous run
 
 | Metric | Δ |
 |--------|---|
-| Packages LOC | +418 |
-| Test functions | +7 |
-| Total LOC | +643 |
-| Coverage | +0.1% |
+| Packages LOC | +373 |
+| Test functions | +4 |
+| Total LOC | +552 |
+| Coverage | -0.2% |
 
 ## Δ vs oldest in window (30 runs)
 
 | Metric | Start | Latest | Δ |
 |--------|-------|--------|---|
-| Packages LOC | 10,494 | 23,390 | +12,896 |
-| Test functions | 414 | 654 | +240 |
-| Total LOC | 22,739 | 45,061 | +22,322 |
+| Packages LOC | 12,731 | 23,763 | +11,032 |
+| Test functions | 464 | 658 | +194 |
+| Total LOC | 26,315 | 45,613 | +19,298 |
 
 ## History
 
 | At (UTC) | Commit | Ver | Pkg LOC | Tests | Total LOC | Cov% | Δ pkg |
 |----------|--------|-----|---------|-------|-----------|------|-------|
-| 2026-06-21 05:01 | `606b197` | 0.2.8 | 10,494 | 414 | 22,739 | 72.7 | — |
-| 2026-06-21 06:05 | `c852c43` | 0.3.0 | 12,731 | 464 | 26,315 | 70.6 | +2,237 |
+| 2026-06-21 06:05 | `c852c43` | 0.3.0 | 12,731 | 464 | 26,315 | 70.6 | — |
 | 2026-06-21 06:24 | `2cf36bd` | 0.3.0 | 12,908 | 470 | 26,621 | 70.6 | +177 |
 | 2026-06-21 06:52 | `7249015` | 0.3.0 | 15,209 | 493 | 29,780 | 68.8 | +2,301 |
 | 2026-06-21 07:12 | `ba4aefe` | 0.3.0 | 16,447 | 525 | 31,557 | 66.4 | +1,238 |
@@ -65,13 +64,14 @@ Auto-generated from `stats/history.jsonl` on each CI run on `main`.
 | 2026-10-12 15:50 | `4deaf78` | 0.5.0 | 22,858 | 646 | 44,069 | 91.0 | — |
 | 2026-10-12 16:50 | `ec85e3f` | 0.5.0 | 22,972 | 647 | 44,418 | 90.9 | +114 |
 | 2026-11-25 07:25 | `019275e` | 0.5.0 | 23,390 | 654 | 45,061 | 91.0 | +418 |
+| 2026-11-25 08:36 | `4b771da` | 0.5.0 | 23,763 | 658 | 45,613 | 90.8 | +373 |
 
 ## Workspace LOC (latest)
 
 | Workspace | Lines |
 |-----------|-------|
-| `@sorane/core` | 16,370 |
-| `@sorane/okf` | 3,095 |
+| `@sorane/core` | 16,505 |
+| `@sorane/okf` | 3,333 |
 | `@sorane/search` | 1,097 |
 | `@sorane/cli` | 960 |
 | `@sorane/admin-worker` | 733 |
