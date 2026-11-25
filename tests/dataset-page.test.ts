@@ -1,8 +1,13 @@
+import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, test } from "./_expect.ts";
 import {
   renderDatasetPageBody,
   validateDatasetWarnings,
 } from "../packages/core/src/dataset-page.ts";
+import { resolveMediaType } from "../packages/core/src/open-data.ts";
 import { normalizeConcept } from "../packages/okf/src/index.ts";
 
 describe("validateDatasetWarnings", () => {
@@ -28,6 +33,68 @@ describe("validateDatasetWarnings", () => {
     });
     expect(warnings.some((w) => w.includes("unknown license"))).toBe(true);
     expect(warnings.some((w) => w.includes("http://"))).toBe(true);
+  });
+
+  test("OOXML media types and local static distribution byteSize/checksum drift warnings", () => {
+    expect(resolveMediaType("docx")).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+    expect(resolveMediaType("pptx")).toBe(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    );
+
+    const staticDir = mkdtempSync(join(tmpdir(), "sorane-dist-check-"));
+    try {
+      const payload = Buffer.from("id,val\n1,42\n", "utf8");
+      writeFileSync(join(staticDir, "report.csv"), payload);
+      const digest = createHash("sha256").update(payload).digest("hex");
+
+      const ok = validateDatasetWarnings(
+        {
+          license: "CC-BY-4.0",
+          publisher: { name: "Org" },
+          distributions: [
+            {
+              title: "Report",
+              format: "csv",
+              accessURL: "static/report.csv",
+              byteSize: payload.length,
+              checksum: `sha256:${digest}`,
+            },
+          ],
+        },
+        { staticDir },
+      );
+      expect(ok.length).toBe(0);
+
+      const drifted = validateDatasetWarnings(
+        {
+          license: "CC-BY-4.0",
+          publisher: { name: "Org" },
+          distributions: [
+            {
+              title: "Report",
+              format: "csv",
+              accessURL: "/report.csv",
+              byteSize: 999,
+              checksum: `sha256:${"0".repeat(64)}`,
+            },
+            {
+              title: "Missing",
+              format: "xlsx",
+              accessURL: "/missing.xlsx",
+              byteSize: 100,
+            },
+          ],
+        },
+        { staticDir },
+      );
+      expect(drifted.some((w) => w.includes("byteSize"))).toBe(true);
+      expect(drifted.some((w) => w.includes("sha256 checksum mismatch"))).toBe(true);
+      expect(drifted.some((w) => w.includes("local file not found"))).toBe(true);
+    } finally {
+      rmSync(staticDir, { recursive: true, force: true });
+    }
   });
 });
 

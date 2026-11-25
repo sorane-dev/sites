@@ -31,6 +31,8 @@ const FORMAT_MEDIA: Record<string, string> = {
   md: "text/markdown",
   html: "text/html",
   parquet: "application/vnd.apache.parquet",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 

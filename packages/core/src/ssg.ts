@@ -503,6 +503,36 @@ function articleRevisionBlock(concept: OkfConcept, lang: string): string {
   return revisionHistoryHtml(revisions, lang);
 }
 
+/** OKF v0.3 §5.1: Render provenance sources block when `sources[]` is present. */
+export function articleSourcesBlock(concept: OkfConcept, lang: string): string {
+  if (!concept.sources || concept.sources.length === 0) return "";
+  const ja = lang.toLowerCase().startsWith("ja");
+  const heading = ja ? "出典" : "Sources";
+  const items = concept.sources
+    .map((s) => {
+      const idAttr = s.id ? ` id="okf-source-${escapeHtml(s.id)}"` : "";
+      const label = escapeHtml(s.title ?? s.resource);
+      const isHttp = /^https?:\/\//i.test(s.resource.trim());
+      const main = isHttp
+        ? `<a href="${escapeHtml(s.resource)}" rel="noopener noreferrer">${label}</a>`
+        : label;
+      const meta: string[] = [];
+      if (s.author) meta.push(`<span class="article-source-author">${escapeHtml(s.author)}</span>`);
+      if (s.last_modified) {
+        meta.push(`<time datetime="${escapeHtml(s.last_modified)}">${escapeHtml(s.last_modified)}</time>`);
+      }
+      const suffix = meta.length > 0 ? ` <span class="article-source-meta">(${meta.join(" · ")})</span>` : "";
+      return `<li${idAttr}>${main}${suffix}</li>`;
+    })
+    .join("");
+  return (
+    `<section class="article-sources" aria-labelledby="article-sources-heading">` +
+    `<h2 id="article-sources-heading">${escapeHtml(heading)}</h2>` +
+    `<ul>${items}</ul>` +
+    `</section>\n`
+  );
+}
+
 export function renderArticleBodyWithMeta(
   concept: OkfConcept,
   nav?: ArticleNav,
@@ -538,11 +568,13 @@ export function renderArticleBodyWithMeta(
     "</header>",
   ].join("\n");
   const lang = opts?.lang ?? "ja";
+  const sourcesBlock = articleSourcesBlock(concept, lang);
   const revisionBlock = articleRevisionBlock(concept, lang);
   const bodyHtml =
     `<article class="article-page${articleFontClass(concept)}">\n` +
     `${header}\n` +
     `<div class="article-body">\n${section.html}\n</div>\n` +
+    `${sourcesBlock}` +
     `${revisionBlock}` +
     `${related}` +
     `${articleNavHtml(nav)}\n` +
@@ -588,11 +620,13 @@ export async function renderArticleBodyWithMetaForConfig(
     "</header>",
   ].join("\n");
   const lang = opts?.lang ?? "ja";
+  const sourcesBlock = articleSourcesBlock(concept, lang);
   const revisionBlock = articleRevisionBlock(concept, lang);
   const bodyHtml =
     `<article class="article-page${articleFontClass(concept)}">\n` +
     `${header}\n` +
     `<div class="article-body">\n${section.html}\n</div>\n` +
+    `${sourcesBlock}` +
     `${revisionBlock}` +
     `${related}` +
     `${articleNavHtml(nav)}\n` +

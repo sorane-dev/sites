@@ -146,6 +146,36 @@ describe("renderArticleBody", () => {
     const html = renderArticleBody(concept);
     expect(html).toContain('class="article-page font-serif"');
   });
+
+  test("renders OKF v0.3 sources provenance section with anchors", () => {
+    const concept = normalizeConcept(
+      {
+        type: "article",
+        title: "Revenue",
+        sources: [
+          {
+            id: "rev-policy",
+            resource: "https://wiki.example/finance/rev",
+            title: "Revenue Policy",
+            author: "team:finance",
+            last_modified: "2026-06-01",
+          },
+          {
+            resource: "all queries in project X",
+          },
+        ],
+      },
+      "body",
+      "revenue",
+    );
+    const html = renderArticleBody(concept);
+    expect(html).toContain('class="article-sources"');
+    expect(html).toContain('id="okf-source-rev-policy"');
+    expect(html).toContain('href="https://wiki.example/finance/rev"');
+    expect(html).toContain("Revenue Policy");
+    expect(html).toContain("team:finance");
+    expect(html).toContain("all queries in project X");
+  });
 });
 
 describe("renderBlogIndexBody", () => {

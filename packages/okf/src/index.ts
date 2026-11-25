@@ -68,10 +68,12 @@ export {
   OKF_RESERVED_FILENAMES,
   isReservedOkfFilename,
   isOkfDotPath,
+  isOkfNonConceptReservedFile,
   resolveOkfPath,
   type ResolvedOkfPath,
   type ResolveOkfPathOptions,
 } from "./path.ts";
+export { patchFrontmatterScalar, patchFrontmatterActorEvent } from "./frontmatter-patch.ts";
 export { parseConcept, type ParsedConcept } from "./parse.ts";
 export {
   OKF_SPEC_VERSION,

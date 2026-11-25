@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import type { OkfConcept } from "@sorane/okf";
 import {
   isKnownLicenseId,
@@ -36,8 +39,28 @@ function distributionRow(
   );
 }
 
+function resolveLocalStaticFile(
+  accessURL: string,
+  staticDir: string,
+): string | null {
+  const trimmed = accessURL.trim();
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith("//")) {
+    return null;
+  }
+  const clean = trimmed.split(/[?#]/)[0]!.replace(/^\/+/, "");
+  const rel = clean.startsWith("static/") ? clean.slice("static/".length) : clean;
+  if (!rel || rel.split("/").some((s) => s === ".." || s === ".")) return null;
+  const root = resolve(staticDir);
+  const abs = resolve(root, rel);
+  if (!abs.startsWith(`${root}/`) && abs !== root) return null;
+  return abs;
+}
+
 /** `type: dataset` 向けの warning（schema エラー以外）。 */
-export function validateDatasetWarnings(frontmatter: Record<string, unknown>): readonly string[] {
+export function validateDatasetWarnings(
+  frontmatter: Record<string, unknown>,
+  opts?: { readonly staticDir?: string },
+): readonly string[] {
   const warnings: string[] = [];
   const licenseRaw = frontmatter.license;
   if (typeof licenseRaw === "string" && licenseRaw.length > 0 && !isKnownLicenseId(licenseRaw)) {
@@ -50,6 +73,32 @@ export function validateDatasetWarnings(frontmatter: Record<string, unknown>): r
       warnings.push(
         `dataset: distribution "${dist.title}" uses http:// accessURL; prefer https://`,
       );
+    }
+    if (opts?.staticDir && (dist.byteSize !== undefined || dist.checksum !== undefined)) {
+      const localAbs = resolveLocalStaticFile(dist.accessURL, opts.staticDir);
+      if (localAbs) {
+        if (!existsSync(localAbs)) {
+          warnings.push(
+            `dataset: distribution "${dist.title}" local file not found in static dir (${dist.accessURL})`,
+          );
+        } else {
+          const actualSize = statSync(localAbs).size;
+          if (dist.byteSize !== undefined && dist.byteSize !== actualSize) {
+            warnings.push(
+              `dataset: distribution "${dist.title}" byteSize (${dist.byteSize}) does not match file size (${actualSize})`,
+            );
+          }
+          if (dist.checksum && /^sha256:[0-9a-f]{64}$/i.test(dist.checksum)) {
+            const actualHash = createHash("sha256").update(readFileSync(localAbs)).digest("hex");
+            const expectedHash = dist.checksum.slice("sha256:".length).toLowerCase();
+            if (actualHash !== expectedHash) {
+              warnings.push(
+                `dataset: distribution "${dist.title}" sha256 checksum mismatch (actual: sha256:${actualHash})`,
+              );
+            }
+          }
+        }
+      }
     }
   }
   warnings.push(...validateEuThemeWarnings(frontmatter.theme, "dataset"));

@@ -72,6 +72,8 @@ export function humanizeDirectoryLabel(dirRel: string): string {
 
 export interface DiscoverDirectoryIndexesOptions {
   readonly minEntries?: number;
+  /** Non-concept OKF reserved paths (e.g. frontmatter-less `sub/index.md`) to treat as existing author indexes. */
+  readonly reservedRelPaths?: readonly string[];
 }
 
 /** 作者 `index.md` が無いサブディレクトリ向け OKF ディレクトリ一覧を検出する。 */
@@ -84,6 +86,14 @@ export function discoverDirectoryIndexes(
   const minEntries = opts?.minEntries ?? 2;
   const byDir = new Map<string, DirectoryIndexEntry[]>();
   const hasAuthorIndex = new Set<string>();
+
+  for (const rel of opts?.reservedRelPaths ?? []) {
+    const localeId = localeIdFromRelPath(rel, i18n);
+    const logical = logicalRelPath(rel, i18n);
+    if (slugFromLogical(logical) === "index") {
+      hasAuthorIndex.add(`${localeId}\0${posixDirname(logical)}`);
+    }
+  }
 
   for (const p of parsed) {
     const localeId = localeIdFromRelPath(p.relPath, i18n);
