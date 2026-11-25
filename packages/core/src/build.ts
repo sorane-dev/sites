@@ -9,6 +9,7 @@ import { resolveBuildOutputs } from "./presets.ts";
 import {
   parseConcept,
   buildBundleEntries,
+  buildBundleRootIndex,
   isBuildableContentType,
   resolveEffectiveType,
   packOkfcFromIr,
@@ -1862,21 +1863,26 @@ export async function runBuild(opts: BuildOptions): Promise<BuildResult> {
   }
 
   // Same publish gate as HTML / OKFC: draft: true is not a public corpus entry.
-  const conceptBundleEntries = buildBundleEntries(
-    parsed
-      .filter(
-        (p) =>
-          includePageInBuild(p.concept, includeDrafts) &&
-          p.concept.type !== "index" &&
-          slugFromRel(p.relPath) !== "index" &&
-          !isNotFoundSource(p.relPath),
-      )
-      .map((p) => ({
-        concept: p.concept,
-        slug: slugFromRel(p.relPath),
-      })),
-  );
+  const bundleConcepts = parsed
+    .filter(
+      (p) =>
+        includePageInBuild(p.concept, includeDrafts) &&
+        p.concept.type !== "index" &&
+        slugFromRel(p.relPath) !== "index" &&
+        !isNotFoundSource(p.relPath),
+    )
+    .map((p) => ({
+      concept: p.concept,
+      slug: slugFromRel(p.relPath),
+    }));
+  const conceptBundleEntries = buildBundleEntries(bundleConcepts);
+  const rootIndexEntry = buildBundleRootIndex(bundleConcepts, {
+    title: config.site.title,
+    description: config.site.description,
+    license: config.site.open_data?.default_license,
+  });
   const bundleEntries = [
+    rootIndexEntry,
     ...conceptBundleEntries,
     ...directoryIndexBundleRows.map((row) => ({
       path: row.path,

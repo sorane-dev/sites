@@ -1,6 +1,11 @@
 import { gunzipSync } from "node:zlib";
 import { describe, expect, test } from "./_expect.ts";
-import { buildBundleEntries, buildOkfBundle } from "../packages/okf/src/bundle.ts";
+import {
+  buildBundleEntries,
+  buildBundleRootIndex,
+  buildOkfBundle,
+  OKF_SPEC_VERSION,
+} from "../packages/okf/src/bundle.ts";
 import { normalizeConcept } from "../packages/okf/src/index.ts";
 import { parseYaml, dumpYaml } from "../packages/okf/src/yaml.ts";
 
@@ -38,6 +43,29 @@ describe("buildOkfBundle", () => {
     const tar = gunzipSync(buf);
     expect(tar.length > 512).toBe(true);
     expect(tar.subarray(0, 100).toString("utf8")).toContain("article/t.md");
+  });
+
+  test("OKF v0.3 §8.1: meta 指定時にルート index.md (okf_version: \"0.3\") を含める", async () => {
+    const concept = normalizeConcept(
+      { type: "article", title: "Orders", description: "Order metrics." },
+      "body",
+      "orders",
+    );
+    const root = buildBundleRootIndex([{ concept, slug: "orders" }], {
+      title: "Acme",
+      description: "Acme knowledge bundle",
+      license: "CC-BY-4.0",
+    });
+    expect(root.path).toBe("index.md");
+    expect(root.content).toContain(`okf_version: "${OKF_SPEC_VERSION}"`);
+    expect(root.content).toContain("title: Acme");
+    expect(root.content).toContain("license: CC-BY-4.0");
+    expect(root.content).toContain("* [Orders](article/orders.md) - Order metrics.");
+
+    const buf = await buildOkfBundle([{ concept, slug: "orders" }], { title: "Acme" });
+    const tarText = gunzipSync(buf).toString("utf8");
+    expect(tarText).toContain("index.md");
+    expect(tarText).toContain('okf_version: "0.3"');
   });
 });
 

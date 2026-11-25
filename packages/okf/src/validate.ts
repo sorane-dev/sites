@@ -163,7 +163,7 @@ export function validateSource(
   }
   if (concept.stale_after && isStale(concept.stale_after)) {
     warnings.push(
-      `stale_after ${concept.stale_after}: concept is past its freshness date (OKF v0.2)`,
+      `stale_after ${concept.stale_after}: concept is past its freshness date (OKF v0.3)`,
     );
   }
 
@@ -195,9 +195,13 @@ export function validateSource(
     };
     if (concept.timestamp) fmForSchema.timestamp = concept.timestamp;
     if (concept.description) fmForSchema.description = concept.description;
+    else delete fmForSchema.description;
     if (concept.tags) fmForSchema.tags = [...concept.tags];
+    else delete fmForSchema.tags;
     if (concept.resource) fmForSchema.resource = concept.resource;
+    else delete fmForSchema.resource;
     if (concept.profile) fmForSchema.profile = concept.profile;
+    else delete fmForSchema.profile;
     if (concept.generated) fmForSchema.generated = concept.generated;
     if (concept.verified) {
       fmForSchema.verified =
@@ -206,6 +210,7 @@ export function validateSource(
     if (concept.sources) fmForSchema.sources = concept.sources.map((s) => ({ ...s }));
     if (concept.usage_window) fmForSchema.usage_window = { ...concept.usage_window };
     if (concept.status) fmForSchema.status = concept.status;
+    if (concept.superseded_by) fmForSchema.superseded_by = concept.superseded_by;
     if (concept.stale_after) fmForSchema.stale_after = concept.stale_after;
 
     if (!validate(fmForSchema)) {

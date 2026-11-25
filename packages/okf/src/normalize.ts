@@ -1,7 +1,8 @@
 /**
  * 入力 frontmatter を OKF native 表現に正規化する（純粋・決定論的）。
  *
- * OKF v0.2: `generated.at` may supply the content-change time when `timestamp` is absent.
+ * OKF v0.3: `generated.at` may supply the content-change time when `timestamp` is absent;
+ * null/empty values are treated as absent; scalar `tags` becomes a one-element list.
  */
 
 import {
@@ -32,17 +33,19 @@ export interface OkfConcept {
   readonly tags?: readonly string[];
   readonly resource?: string;
   readonly profile?: string;
-  /** OKF v0.2: how the current content was produced. */
+  /** OKF v0.3: how the current content was produced. */
   readonly generated?: OkfActorEvent;
-  /** OKF v0.2: verification events (bare mapping normalized to a one-element list). */
+  /** OKF v0.3: verification events (bare mapping normalized to a one-element list). */
   readonly verified?: readonly OkfActorEvent[];
-  /** OKF v0.2: provenance sources. */
+  /** OKF v0.3: provenance sources (bare mapping normalized to a one-element list). */
   readonly sources?: readonly OkfSourceEntry[];
-  /** OKF v0.2: shared usage window for sources[].usage_count. */
+  /** OKF v0.3: shared usage window for sources[].usage_count. */
   readonly usage_window?: OkfDateRange;
-  /** OKF v0.2 lifecycle; absent ⇒ treat as stable. */
+  /** OKF v0.3 lifecycle; absent ⇒ treat as stable. */
   readonly status?: OkfConceptStatus;
-  /** OKF v0.2 absolute staleness date (YYYY-MM-DD). */
+  /** OKF v0.3 §5.4: replacement concept path (meaningful with status: deprecated). */
+  readonly superseded_by?: string;
+  /** OKF v0.3 §5.5: absolute staleness date or date-time (RFC 3339). */
   readonly stale_after?: string;
   readonly warnings: readonly string[];
 }
@@ -53,6 +56,9 @@ function resolveType(raw: Record<string, unknown>): string {
 }
 
 function toIsoTimestamp(value: unknown): string | undefined {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString();
+  }
   if (typeof value !== "string" || value.length === 0) return undefined;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return `${value}T00:00:00Z`;
@@ -108,9 +114,14 @@ export function normalizeConcept(
     typeof raw.description === "string" && raw.description.length > 0
       ? raw.description
       : undefined;
-  const tags = Array.isArray(raw.tags)
-    ? raw.tags.filter((t): t is string => typeof t === "string")
-    : undefined;
+  // OKF v0.3 §11.2 #1 & #2: empty list/string/null → absent; scalar tags → 1-item list (no comma split).
+  let tags: readonly string[] | undefined;
+  if (Array.isArray(raw.tags)) {
+    const filtered = raw.tags.filter((t): t is string => typeof t === "string" && t.length > 0);
+    if (filtered.length > 0) tags = filtered;
+  } else if (typeof raw.tags === "string" && raw.tags.length > 0) {
+    tags = [raw.tags];
+  }
   const resource =
     typeof raw.resource === "string" && raw.resource.length > 0
       ? raw.resource
@@ -135,6 +146,7 @@ export function normalizeConcept(
     sources: trust.sources,
     usage_window: trust.usage_window,
     status: trust.status,
+    superseded_by: trust.superseded_by,
     stale_after: trust.stale_after,
     warnings,
   };

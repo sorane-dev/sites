@@ -70,7 +70,7 @@ export function buildWebMcpContent(ir: KnowledgeIr, opts: {
         body: entry.pack.body, body_format: entry.pack.body_format,
         sections: webMcpSections(c.body, c.title),
         sources: c.sources ?? [], verified: c.verified ?? [],
-        generated: c.generated, status: c.status, stale_after: c.stale_after,
+        generated: c.generated, status: c.status, superseded_by: c.superseded_by, stale_after: c.stale_after,
         ...(disclosure ? { ai_disclosure: disclosure } : {}),
       } : {}),
       ...(features.datasets && c.type === "dataset" ? { dataset: {

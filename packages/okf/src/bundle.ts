@@ -1,11 +1,22 @@
 import { createGzip } from "node:zlib";
 import type { OkfConcept } from "./normalize.ts";
-import { conceptToOkfMarkdown } from "./serialize.ts";
+import { conceptToOkfMarkdown, formatScalar } from "./serialize.ts";
+
+/** Upstream OKF specification version targeted by generated bundles. */
+export const OKF_SPEC_VERSION = "0.3";
 
 export interface BundleEntry {
   readonly path: string;
   readonly content: string;
   readonly mtime: number;
+}
+
+export interface BundleMetadata {
+  /** OKF version string (defaults to `"0.3"`). Always serialized as a quoted YAML string (§4, §8.1). */
+  readonly okf_version?: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly license?: string;
 }
 
 function conceptMtime(concept: OkfConcept): number {
@@ -34,6 +45,51 @@ export function buildBundleEntries(concepts: readonly BundleConcept[]): BundleEn
       content: conceptToOkfMarkdown(c.concept),
       mtime: conceptMtime(c.concept),
     }));
+}
+
+/**
+ * OKF v0.3 §8.1: Bundle-root `index.md` with `okf_version` and optional
+ * bundle metadata (`title`, `description`, `license`), plus grouped concept links.
+ */
+export function buildBundleRootIndex(
+  concepts: readonly BundleConcept[],
+  meta?: BundleMetadata,
+): BundleEntry {
+  const version = meta?.okf_version ?? OKF_SPEC_VERSION;
+  const fmLines = [`okf_version: "${version.replace(/"/g, '\\"')}"`];
+  if (meta?.title) fmLines.push(`title: ${formatScalar(meta.title)}`);
+  if (meta?.description) fmLines.push(`description: ${formatScalar(meta.description)}`);
+  if (meta?.license) fmLines.push(`license: ${formatScalar(meta.license)}`);
+
+  const byType = new Map<string, BundleConcept[]>();
+  let maxMtime = 0;
+  for (const c of concepts) {
+    const list = byType.get(c.concept.type) ?? [];
+    list.push(c);
+    byType.set(c.concept.type, list);
+    const mt = conceptMtime(c.concept);
+    if (mt > maxMtime) maxMtime = mt;
+  }
+
+  const bodyLines: string[] = [];
+  for (const type of [...byType.keys()].sort()) {
+    const group = byType.get(type)!.slice().sort((a, b) => a.slug.localeCompare(b.slug));
+    bodyLines.push(`# ${type}`);
+    bodyLines.push("");
+    for (const item of group) {
+      const desc = item.concept.description?.trim();
+      const suffix = desc ? ` - ${desc}` : "";
+      bodyLines.push(`* [${item.concept.title}](${item.concept.type}/${item.slug}.md)${suffix}`);
+    }
+    bodyLines.push("");
+  }
+
+  const body = bodyLines.length > 0 ? `\n${bodyLines.join("\n")}` : "\n";
+  return {
+    path: "index.md",
+    content: `---\n${fmLines.join("\n")}\n---\n${body}`,
+    mtime: maxMtime,
+  };
 }
 
 /** 最小 tar（USTAR）を組み立てる。 */
@@ -67,9 +123,16 @@ function tarEntries(entries: readonly BundleEntry[]): Buffer {
   return Buffer.concat(blocks);
 }
 
-/** OKF bundle を gzip 圧縮した bytes として返す。 */
-export function buildOkfBundle(concepts: readonly BundleConcept[]): Promise<Buffer> {
+/** OKF bundle を gzip 圧縮した bytes として返す。`meta` 指定時はルート `index.md` (§8.1) を含める。 */
+export function buildOkfBundle(
+  concepts: readonly BundleConcept[],
+  meta?: BundleMetadata,
+): Promise<Buffer> {
   const entries = buildBundleEntries(concepts);
+  if (meta !== undefined) {
+    entries.push(buildBundleRootIndex(concepts, meta));
+    entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  }
   const tar = tarEntries(entries);
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];

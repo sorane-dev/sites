@@ -71,7 +71,7 @@ describe("directoryIndexOkfMarkdown", () => {
       ],
     });
     expect(md.startsWith("# Datasets\n")).toBe(true);
-    expect(md).toContain("[Budget](dataset/budget.md)");
+    expect(md).toContain("[Budget](/dataset/budget.md)");
     expect(md.includes("---")).toBe(false);
   });
 });

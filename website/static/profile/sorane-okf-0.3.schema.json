@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://ssg.sorane.dev/profile/sorane-okf/0.3",
   "title": "sorane-okf/0.3",
-  "description": "sorane profile on OKF v0.2 base: extended types, open-data metadata, AI disclosure, and optional OKF trust/provenance/lifecycle fields.",
+  "description": "sorane profile on OKF v0.3 base: extended types, open-data metadata, AI disclosure, and optional OKF trust/provenance/lifecycle fields.",
   "oneOf": [
     { "$ref": "#/$defs/article" },
     { "$ref": "#/$defs/index" },
@@ -13,20 +13,27 @@
     { "$ref": "#/$defs/faq" }
   ],
   "$defs": {
+    "okfTimestamp": {
+      "oneOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "string", "format": "date" }
+      ],
+      "description": "RFC 3339 date-time with explicit UTC offset or full-date (YYYY-MM-DD, start of day in UTC)"
+    },
     "actorEvent": {
       "type": "object",
       "required": ["by", "at"],
       "properties": {
-        "by": { "type": "string", "minLength": 1, "description": "Actor: producer/version | human:<id> | process:<id>" },
-        "at": { "type": "string", "format": "date-time", "description": "ISO 8601 datetime with explicit UTC offset" }
+        "by": { "type": "string", "minLength": 1, "description": "Actor: producer/version | human:<id> | team:<id> | process:<id>" },
+        "at": { "$ref": "#/$defs/okfTimestamp" }
       },
       "additionalProperties": true
     },
     "dateRange": {
       "type": "object",
       "properties": {
-        "from": { "type": "string", "format": "date-time" },
-        "to": { "type": "string", "format": "date-time" }
+        "from": { "$ref": "#/$defs/okfTimestamp" },
+        "to": { "$ref": "#/$defs/okfTimestamp" }
       },
       "additionalProperties": true
     },
@@ -39,7 +46,7 @@
         "title": { "type": "string" },
         "author": { "type": "string" },
         "usage_count": { "type": "number" },
-        "last_modified": { "type": "string", "format": "date-time" },
+        "last_modified": { "$ref": "#/$defs/okfTimestamp" },
         "usage_window": { "$ref": "#/$defs/dateRange" }
       },
       "additionalProperties": true
@@ -84,13 +91,18 @@
         "description": { "type": "string" },
         "resource": { "type": "string" },
         "tags": {
-          "type": "array",
-          "items": { "type": "string" }
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          ]
         },
         "timestamp": {
           "type": "string",
           "format": "date-time",
-          "description": "Legacy content date; OKF v0.2 prefers generated.at"
+          "description": "Content-change timestamp; takes precedence over generated.at when both are present"
         },
         "profile": { "type": "string" },
         "generated": { "$ref": "#/$defs/actorEvent" },
@@ -104,18 +116,28 @@
           ]
         },
         "sources": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/sourceEntry" }
+          "oneOf": [
+            { "$ref": "#/$defs/sourceEntry" },
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/sourceEntry" }
+            }
+          ]
         },
         "usage_window": { "$ref": "#/$defs/dateRange" },
         "status": {
           "type": "string",
-          "enum": ["draft", "stable", "deprecated"]
+          "minLength": 1,
+          "description": "Lifecycle status: draft | stable | deprecated (unknown values preserved as non-stable per OKF v0.3)"
+        },
+        "superseded_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path or URI to replacement concept when status is deprecated (OKF v0.3)"
         },
         "stale_after": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Absolute instant with explicit UTC offset; stale when now >= stale_after"
+          "$ref": "#/$defs/okfTimestamp",
+          "description": "Absolute instant (or UTC start-of-day date); stale when now >= stale_after"
         },
         "identifier": { "type": "string", "minLength": 1 },
         "language": { "type": "string", "minLength": 2 },
