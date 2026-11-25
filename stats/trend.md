@@ -6,36 +6,35 @@ Auto-generated from `stats/history.jsonl` on each CI run on `main`.
 
 | Field | Value |
 |-------|-------|
-| Timestamp | 2026-10-12T16:50:12.636Z |
-| Commit | `ec85e3f` |
+| Timestamp | 2026-11-25T07:25:37.518Z |
+| Commit | `019275e` |
 | Version | `0.5.0` |
-| Packages LOC | 22,972 |
-| Test functions | 647 |
-| Total LOC | 44,418 |
-| Line coverage | 90.9% |
+| Packages LOC | 23,390 |
+| Test functions | 654 |
+| Total LOC | 45,061 |
+| Line coverage | 91.0% |
 
 ## Δ vs previous run
 
 | Metric | Δ |
 |--------|---|
-| Packages LOC | +114 |
-| Test functions | +1 |
-| Total LOC | +349 |
-| Coverage | -0.1% |
+| Packages LOC | +418 |
+| Test functions | +7 |
+| Total LOC | +643 |
+| Coverage | +0.1% |
 
 ## Δ vs oldest in window (30 runs)
 
 | Metric | Start | Latest | Δ |
 |--------|-------|--------|---|
-| Packages LOC | 10,494 | 22,972 | +12,478 |
-| Test functions | 414 | 647 | +233 |
-| Total LOC | 22,635 | 44,418 | +21,783 |
+| Packages LOC | 10,494 | 23,390 | +12,896 |
+| Test functions | 414 | 654 | +240 |
+| Total LOC | 22,739 | 45,061 | +22,322 |
 
 ## History
 
 | At (UTC) | Commit | Ver | Pkg LOC | Tests | Total LOC | Cov% | Δ pkg |
 |----------|--------|-----|---------|-------|-----------|------|-------|
-| 2026-06-21 04:48 | `efb487f` | 0.2.7 | 10,494 | 414 | 22,635 | 72.7 | — |
 | 2026-06-21 05:01 | `606b197` | 0.2.8 | 10,494 | 414 | 22,739 | 72.7 | — |
 | 2026-06-21 06:05 | `c852c43` | 0.3.0 | 12,731 | 464 | 26,315 | 70.6 | +2,237 |
 | 2026-06-21 06:24 | `2cf36bd` | 0.3.0 | 12,908 | 470 | 26,621 | 70.6 | +177 |
@@ -65,13 +64,14 @@ Auto-generated from `stats/history.jsonl` on each CI run on `main`.
 | 2026-10-12 13:55 | `0ac345b` | 0.5.0 | 22,858 | 643 | 43,920 | 65.5 | — |
 | 2026-10-12 15:50 | `4deaf78` | 0.5.0 | 22,858 | 646 | 44,069 | 91.0 | — |
 | 2026-10-12 16:50 | `ec85e3f` | 0.5.0 | 22,972 | 647 | 44,418 | 90.9 | +114 |
+| 2026-11-25 07:25 | `019275e` | 0.5.0 | 23,390 | 654 | 45,061 | 91.0 | +418 |
 
 ## Workspace LOC (latest)
 
 | Workspace | Lines |
 |-----------|-------|
-| `@sorane/core` | 16,356 |
-| `@sorane/okf` | 2,691 |
+| `@sorane/core` | 16,370 |
+| `@sorane/okf` | 3,095 |
 | `@sorane/search` | 1,097 |
 | `@sorane/cli` | 960 |
 | `@sorane/admin-worker` | 733 |
