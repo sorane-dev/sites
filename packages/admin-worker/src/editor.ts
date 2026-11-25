@@ -1,4 +1,5 @@
 import { extract } from '../../okf/src/extract.ts';
+import { patchFrontmatterActorEvent, patchFrontmatterScalar } from '../../okf/src/frontmatter-patch.ts';
 import { parseYaml, dumpYaml } from '../../okf/src/yaml.ts';
 import { fail, escape, formCsrf } from '../vendor/mikaki/oidc.ts';
 import { contentDraft, type ContentChange } from '../../ssg-worker/src/draft-input.ts';
@@ -29,7 +30,7 @@ export function articleBody(body:string,title:string) {
   if(!heading || heading[3].trim()!==title.trim()) return {body,heading:null};
   return {body:body.slice(heading[0].length),heading:{prefix:heading[1]+'#'+heading[2],suffix:heading[3].match(/[ \t]*$/)![0]+heading[4]+(heading[5]??'')}};
 }
-export async function editorDraft(source:ContentWorkspace,value:Record<string,unknown>) {
+export async function editorDraft(source:ContentWorkspace,value:Record<string,unknown>,opts?:{actor?:string}) {
   if(typeof value.path!=='string' || typeof value.title!=='string' || !value.title.trim() || value.title.length>300 ||
     typeof value.body!=='string' || /[\x00-\x1f\x7f]/.test(value.title) ||
     typeof value.operationId!=='string') fail(400,'invalid_editor_content');
@@ -37,10 +38,28 @@ export async function editorDraft(source:ContentWorkspace,value:Record<string,un
   const existing=source.articles.find(file=>file.path===value.path);
   if(value.path && !existing) fail(404,'article_not_found');
   const path=existing?.path??`${source.contentDir}/article-${value.operationId.slice(0,8)}.md`;
-  const metadata=existing?article(existing.text).metadata:{type:'article',timestamp:value.timestamp??new Date(source.createdAt*1000).toISOString(),profile:'sorane-okf/0.1'};
   const title=value.title.trim();
-  // Keep all existing OKF fields; only title and body are edited here.
-  const text=`---\n${dumpYaml({...metadata,title}).trimEnd()}\n---\n\n${value.body}`;
+  const editTimestamp=typeof value.timestamp==='string'?value.timestamp:new Date(source.createdAt*1000).toISOString();
+  const generatedEvent=opts?.actor?{by:opts.actor,at:editTimestamp}:undefined;
+  const metadata=existing?article(existing.text).metadata:{type:'article',timestamp:editTimestamp,profile:'sorane-okf/0.3',...(generatedEvent?{generated:generatedEvent}:{})};
+  // OKF v0.3 §4: preserve untouched frontmatter keys, comments, and formatting on edits.
+  let frontmatterBlock:string;
+  if(existing) {
+    const existingArticle=article(existing.text);
+    const rawFm=extract(existing.text).frontmatter;
+    let nextFm:string|null=rawFm;
+    if(nextFm!==null && existingArticle.title!==title) {
+      nextFm=patchFrontmatterScalar(nextFm,'title',title);
+    }
+    if(nextFm!==null && generatedEvent) {
+      nextFm=patchFrontmatterActorEvent(nextFm,'generated',generatedEvent);
+    }
+    const fallback={...metadata,title,...(generatedEvent?{generated:generatedEvent}:{})};
+    frontmatterBlock=(nextFm??dumpYaml(fallback)).trimEnd();
+  } else {
+    frontmatterBlock=dumpYaml({...metadata,title}).trimEnd();
+  }
+  const text=`---\n${frontmatterBlock}\n---\n\n${value.body}`;
   const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
   const changes=new Map<string,ContentChange>(source.changes.map(change=>[change.path,change]));
   if(existing && article(existing.text).title===title && article(existing.text).body===value.body) fail(400,'no_content_changes');
@@ -50,10 +69,12 @@ export async function editorDraft(source:ContentWorkspace,value:Record<string,un
   try{return {draft:contentDraft({schema:1,repository:source.repositoryId,changes:[...changes.values()]}),message:`${title}を${existing?'更新':'作成'}`};}
   catch{fail(400,'invalid_editor_content');}
 }
-export function articleList(site:Site,source:ContentWorkspace|null,editable:boolean) {
+export function articleList(site:Site,source:ContentWorkspace|null,editable:boolean,hasIbisOffice=false) {
   const route=`/sites/${site.id}`;
   const query=source?new URLSearchParams({proposal:source.proposalId}):null;
-  return `<div class="heading-row"><div><p class="eyebrow">CONTENT</p><h1>記事</h1><p>言葉を整えて、サイトを育てましょう。</p></div>${editable&&source?`<a class="button" href="${route}/editor?${query}">${icon('plus')}新しい記事</a>`:''}</div>${source?.changes.length?`<div class="info-strip">${icon('articles')}<span>保存した原稿の変更を表示しています。</span><a href="${route}?view=review">確認・公開へ →</a></div>`:''}<div class="surface"><div class="surface-head"><h2>すべての原稿 <small>${source?.articles.length??0}</small></h2><label class="search-box"><span class="sr-only">記事を検索</span>${icon('search')}<input type="search" placeholder="記事を検索…" data-search></label></div>${source?.articles.length?`<table><thead><tr><th>タイトル</th><th class="type-label">種類</th><th>原稿の状態</th></tr></thead><tbody>${source.articles.map(file=>{const item=article(file.text),changed=source.changes.some(change=>change.path===file.path);const href=`${route}/editor?${new URLSearchParams({proposal:source.proposalId,path:file.path})}`;return `<tr class="article-row" data-article="${escape(item.title)}"><td><a class="article-title" href="${href}"><span class="article-icon">${icon('articles')}</span><span>${escape(item.title)}<span class="article-excerpt">${escape(articleBody(item.body,item.title).body.replace(/[#*\[\]`]/g,'').replace(/\s+/g,' ').slice(0,110))}</span></span></a></td><td class="type-label">${item.type}</td><td><span class="pill ${changed?'pending':'neutral'}">${changed?'変更あり':'保存済み'}</span></td></tr>`;}).join('')}</tbody></table><div class="empty" data-no-results hidden>該当する原稿がありません。</div>`:`<div class="empty"><h2>原稿がまだありません</h2><p>${source?'最初の記事を書いてみましょう。':'原稿の取り込み後、ここから編集できます。'}</p></div>`}</div><p class="muted">${editable?'記事を選ぶと、タイトルと本文を編集できます。':'記事を選ぶと、保存された原稿を読めます。'}</p>`;
+  const officeFiles=source?.officeFiles??[];
+  const officeSection=officeFiles.length?`<div class="surface" style="margin-top:24px"><div class="surface-head"><h2>Office 文書 <small>${officeFiles.length}</small></h2></div><table><thead><tr><th>ファイル</th><th>サイズ</th><th>状態</th><th>操作</th></tr></thead><tbody>${officeFiles.map(file=>{const changed=source?.changes.some(change=>change.path===file.path);const href=`${route}/office?${new URLSearchParams({proposal:source!.proposalId,path:file.path})}`;return `<tr><td><code>${escape(file.path)}</code></td><td>${(file.size/1024).toFixed(1)} KB</td><td><span class="pill ${changed?'pending':'neutral'}">${changed?'変更あり':'保存済み'}</span></td><td>${editable&&hasIbisOffice?`<a class="button secondary" href="${href}">ibisOffice で編集</a>`:'<span class="muted">閲覧専用</span>'}</td></tr>`;}).join('')}</tbody></table></div>`:'';
+  return `<div class="heading-row"><div><p class="eyebrow">CONTENT</p><h1>記事</h1><p>言葉を整えて、サイトを育てましょう。</p></div>${editable&&source?`<a class="button" href="${route}/editor?${query}">${icon('plus')}新しい記事</a>`:''}</div>${source?.changes.length?`<div class="info-strip">${icon('articles')}<span>保存した原稿の変更を表示しています。</span><a href="${route}?view=review">確認・公開へ →</a></div>`:''}<div class="surface"><div class="surface-head"><h2>すべての原稿 <small>${source?.articles.length??0}</small></h2><label class="search-box"><span class="sr-only">記事を検索</span>${icon('search')}<input type="search" placeholder="記事を検索…" data-search></label></div>${source?.articles.length?`<table><thead><tr><th>タイトル</th><th class="type-label">種類</th><th>原稿の状態</th>${editable&&hasIbisOffice?'<th>操作</th>':''}</tr></thead><tbody>${source.articles.map(file=>{const item=article(file.text),changed=source.changes.some(change=>change.path===file.path);const href=`${route}/editor?${new URLSearchParams({proposal:source.proposalId,path:file.path})}`;const ibisHref=`${route}/office?${new URLSearchParams({proposal:source.proposalId,path:file.path})}`;return `<tr class="article-row" data-article="${escape(item.title)}"><td><a class="article-title" href="${href}"><span class="article-icon">${icon('articles')}</span><span>${escape(item.title)}<span class="article-excerpt">${escape(articleBody(item.body,item.title).body.replace(/[#*\[\]`]/g,'').replace(/\s+/g,' ').slice(0,110))}</span></span></a></td><td class="type-label">${item.type}</td><td><span class="pill ${changed?'pending':'neutral'}">${changed?'変更あり':'保存済み'}</span></td>${editable&&hasIbisOffice?`<td><a class="button secondary" href="${ibisHref}">ibisOffice で編集</a></td>`:''}</tr>`;}).join('')}</tbody></table><div class="empty" data-no-results hidden>該当する原稿がありません。</div>`:`<div class="empty"><h2>原稿がまだありません</h2><p>${source?'最初の記事を書いてみましょう。':'原稿の取り込み後、ここから編集できます。'}</p></div>`}</div>${officeSection}<p class="muted">${editable?'記事を選ぶと、タイトルと本文を編集できます。':'記事を選ぶと、保存された原稿を読めます。'}</p>`;
 }
 export function editorPage(site:Site,source:ContentWorkspace,path:string|null,token:string,operationId:string,editable:boolean) {
   const file=path?source.articles.find(file=>file.path===path):null;

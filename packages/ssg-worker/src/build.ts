@@ -55,7 +55,10 @@ export function configuration(source: Source, baseUrl: string) {
 
 /** Run the trusted engine on data only, in a request-scoped, confined VFS. */
 export async function buildSource(source: Source, commit: string, proposalId: string, baseUrl: string, bucket: R2Bucket, draft?:ContentDraft) {
-  if (draft) source=applyDraft(source,draft,configuration(source,baseUrl).build.content_dir);
+  if (draft) {
+    const cfg = configuration(source,baseUrl);
+    source=applyDraft(source,draft,cfg.build.content_dir,cfg.build.static_dir??'static');
+  }
   const cwd = `/tmp/sorane-${proposalId}`;
   return isolated(cwd, async () => {
     mkdirSync(cwd, {recursive:true});
