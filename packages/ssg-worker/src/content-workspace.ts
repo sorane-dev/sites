@@ -7,6 +7,8 @@ export interface ContentWorkspace {
   commit: string;
   repositoryId: string;
   contentDir: string;
+  staticDir: string;
   changes: ContentChange[];
   articles: {path:string;before:string|null;text:string}[];
+  officeFiles: {path:string;before:string|null;size:number}[];
 }

@@ -9,11 +9,12 @@ async function moduleAt(name:string) {
 }
 let SCRIPT:string;
 let articleBody:(body:string,title:string)=>{body:string;heading:{prefix:string;suffix:string}|null};
+let editorDraft:(source:unknown,value:Record<string,unknown>,opts?:{actor?:string})=>Promise<{draft:{changes:{path:string;text:string|null}[]};message:string}>;
 // Node 23's in-process test runner cannot finish registration after top-level
 // asynchronous bundling. Initialise within the test lifecycle instead.
 before(async()=>{
   const [ui,editor]=await Promise.all([moduleAt('ui'),moduleAt('editor')]);
-  SCRIPT=ui.SCRIPT;articleBody=editor.articleBody;
+  SCRIPT=ui.SCRIPT;articleBody=editor.articleBody;editorDraft=editor.editorDraft;
 });
 
 test('the editor detaches only an exact leading title and retains the original separators',()=>{
@@ -124,4 +125,48 @@ test('read-only viewers receive no save shortcut or submit handler',async()=>{
   assert.equal(f.document.listeners.has('keydown'),false);
   assert.equal(f.form.listeners.has('submit'),false);
   assert.equal(f.window.listeners.has('beforeunload'),false);
+});
+
+test('editorDraft preserves untouched frontmatter comments and x-ibis-* keys (OKF v0.3 §4)',async()=>{
+  const originalText=[
+    '---',
+    '# ibisOffice managed',
+    'type: article',
+    'title: Old Title # keep comment',
+    'x-ibis-format: document',
+    "verified: { by: 'human:alice', at: '2026-06-25T09:00:00Z' }",
+    '---',
+    '',
+    'Old body.',
+  ].join('\n');
+  const source={
+    proposalId:'00000000-0000-4000-8000-000000000001',
+    repositoryId:'demo-repo',
+    contentDir:'content',
+    createdAt:1700000000,
+    changes:[],
+    articles:[{path:'content/a.md',before:'a'.repeat(64),text:originalText}],
+  };
+  const bodyOnly=await editorDraft(source,{path:'content/a.md',title:'Old Title',body:'New body.',operationId:'op-1'});
+  const bodyOnlyText=bodyOnly.draft.changes[0]!.text!;
+  assert.ok(bodyOnlyText.includes('# ibisOffice managed'));
+  assert.ok(bodyOnlyText.includes('title: Old Title # keep comment'));
+  assert.ok(bodyOnlyText.includes("verified: { by: 'human:alice', at: '2026-06-25T09:00:00Z' }"));
+
+  const titleChanged=await editorDraft(source,{path:'content/a.md',title:'Updated Title',body:'New body.',operationId:'op-2'});
+  const titleChangedText=titleChanged.draft.changes[0]!.text!;
+  assert.ok(titleChangedText.includes('# ibisOffice managed'));
+  assert.ok(titleChangedText.includes('title: Updated Title # keep comment'));
+  assert.ok(titleChangedText.includes('x-ibis-format: document'));
+  assert.ok(titleChangedText.includes("verified: { by: 'human:alice', at: '2026-06-25T09:00:00Z' }"));
+
+  const withActor=await editorDraft(
+    source,
+    {path:'content/a.md',title:'Updated Title',body:'New body.',timestamp:'2026-11-25T12:00:00.000Z',operationId:'op-3'},
+    {actor:'human:bob'},
+  );
+  const withActorText=withActor.draft.changes[0]!.text!;
+  assert.ok(withActorText.includes('# ibisOffice managed'));
+  assert.ok(withActorText.includes('x-ibis-format: document'));
+  assert.ok(withActorText.includes('generated: { by: human:bob, at: 2026-11-25T12:00:00.000Z }'));
 });

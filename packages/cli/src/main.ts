@@ -44,9 +44,14 @@ async function main(): Promise<void> {
       await runOkfcCmd(rest);
       break;
     }
+    case "office-render": {
+      const { runOfficeRenderCmd } = await import("./office-cmd.ts");
+      await runOfficeRenderCmd(rest);
+      break;
+    }
     default:
       process.stderr.write(
-        "usage: sorane <build|validate|index|search|export|import|okfc|watch|preview> [options]\n" +
+        "usage: sorane <build|validate|index|search|export|import|okfc|office-render|watch|preview> [options]\n" +
           "  build     --cwd <dir> [--clean] [--skip-c2pa] [--drafts] [--preview]\n" +
           "  watch     --cwd <dir> [--clean] [--drafts] [--preview]\n" +
           "  preview   --cwd <dir> [--port 4321] [--watch]\n" +

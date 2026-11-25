@@ -25,6 +25,14 @@ export {
 } from "./export/pdf-html.ts";
 export { pandocCliAvailable, resolvePandocBinary } from "./export/pandoc-cli.ts";
 export {
+  exportOfficeWithIbisCli,
+  ibisOfficeCliAvailable,
+  resolveIbisOfficeBinary,
+  type IbisOfficeExportFormat,
+  type IbisOfficeExportOptions,
+  type IbisOfficeExportResult,
+} from "./export/ibis-office-cli.ts";
+export {
   vivliostyleCliAvailable,
   vivliostyleHtmlToPdf,
   resolveVivliostyleBinary,

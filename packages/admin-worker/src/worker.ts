@@ -6,9 +6,10 @@ import {
 import { errors } from "jose";
 import { ROLES, can, checkInstance, getSite, listSites, siteDetails, mutate, type Action, type Role } from "./store.ts";
 import { enqueueBuilds, preview } from "./builds.ts";
-import { contentDraft, draftDigest, MAX_DRAFT_REQUEST } from '../../ssg-worker/src/draft-input.ts';
+import { contentDraft, draftDigest, MAX_DRAFT_REQUEST, MAX_OFFICE_DRAFT_REQUEST } from '../../ssg-worker/src/draft-input.ts';
 import { CSS, SCRIPT, shell, roleLabels } from './ui.ts';
 import { workspace, articleList, editorPage, editorDraft } from './editor.ts';
+import { ibisOfficeOrigin, createOfficeBlobToken, verifyOfficeBlobToken, fetchOfficeFile, officeDraft, officeEditorPage } from './office.ts';
 import { reviewPage, settingsPage } from './site-views.ts';
 import { listInquiries, getInquiry, updateInquiry, cleanupInquiries, INQUIRY_STATUSES } from "./inquiries.ts";
 
@@ -21,10 +22,10 @@ function json(env: SoraneAdminEnv, value: unknown, status = 200): Response {
   headers.set("Content-Type", "application/json; charset=utf-8");
   return new Response(JSON.stringify(value), { status, headers });
 }
-function page(env: SoraneAdminEnv, title: string, body: string, browser?: string, status = 200): Response {
+function page(env: SoraneAdminEnv, title: string, body: string, browser?: string, status = 200, extraCsp = ""): Response {
   const headers = baseHeaders(env);
   headers.set("Content-Type", "text/html; charset=utf-8");
-  headers.set("Content-Security-Policy", `default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self' ${env.ISSUER}; frame-ancestors 'none'; base-uri 'none'`);
+  headers.set("Content-Security-Policy", `default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self' ${env.ISSUER}; frame-ancestors 'none'; base-uri 'none'${extraCsp ? `; ${extraCsp}` : ""}`);
   if (browser) headers.append("Set-Cookie", cookieHeader(BROWSER, browser, 86400));
   const content = body.includes('class="app-shell"') || body.includes('class="center-page"') ? body : `<div class="center-page"><a class="brand" href="/">sorane<span class="brand-dot">.</span></a><main><h1>${escape(title)}</h1>${body}</main></div>`;
   return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · sorane</title><link rel="stylesheet" href="/admin.css"><script src="/admin.js" defer></script></head><body>${content}</body></html>`, { status, headers });
@@ -142,12 +143,12 @@ async function sitePage(request: Request, env: SoraneAdminEnv, session: Session,
   const { members, proposals, publication } = await siteDetails(env, site);
   const browser = cookie(request, BROWSER) || random(), token = await hash(browser);
   const hidden = () => fields(token, site.revision), url = new URL(request.url);
-  const editor=url.pathname.endsWith('/editor');
+  const editor=url.pathname.endsWith('/editor'), office=url.pathname.endsWith('/office');
   const requested=url.searchParams.get('view')??'articles';
-  const view=editor?'articles':requested;
+  const view=(editor||office)?'articles':requested;
   if(!['articles','review','settings'].includes(view)) fail(404,'not_found');
   if(view==='settings' && site.role!=='owner') fail(403,'permission_denied');
-  let content:string;
+  let content:string, extraCsp='';
   if(view==='review') content=reviewPage(env,site,proposals,publication,token,hidden);
   else if(view==='settings') content=settingsPage(site,members,token,hidden);
   else {
@@ -157,16 +158,29 @@ async function sitePage(request: Request, env: SoraneAdminEnv, session: Session,
     if(selected) {
       try { source=await workspace(env,site.id,selected); }
       catch(error) {
-        if(editor) throw error;
+        if(editor||office) throw error;
         content=`<div class="heading-row"><div><h1>記事</h1><p>原稿を読み込んで編集できます。</p></div></div><section class="error-panel"><h2>原稿を読み込めませんでした</h2><p>しばらくしてから、もう一度お試しください。</p><a class="button secondary" href="/sites/${site.id}">もう一度読み込む</a></section>`;
         return page(env,site.title,shell(site,view,content,token,env.PUBLIC_ORIGIN,proposals.filter(p=>p.state==='submitted').length),browser);
       }
     }
     const editable=can(site.role,'proposal.submit');
-    if(editor&&!source) fail(404,'proposal_not_found');
-    content=editor?editorPage(site,source!,url.searchParams.get('path'),token,crypto.randomUUID(),editable):articleList(site,source,editable);
+    const ibisOrigin=ibisOfficeOrigin(env);
+    if(office) {
+      if(!ibisOrigin) fail(404,'not_found');
+      if(!editable) fail(403,'permission_denied');
+      if(!source) fail(404,'proposal_not_found');
+      const targetPath=url.searchParams.get('path');
+      if(!targetPath) fail(404,'article_not_found');
+      const blobToken=await createOfficeBlobToken(env,{siteId:site.id,proposalId:source.proposalId,path:targetPath});
+      const blobUrl=`${env.RP_ORIGIN}/api/sites/${site.id}/office/blob?${new URLSearchParams({token:blobToken})}`;
+      extraCsp=`frame-src ${ibisOrigin}`;
+      content=officeEditorPage(site,source,targetPath,ibisOrigin,blobUrl,token,crypto.randomUUID());
+    } else {
+      if(editor&&!source) fail(404,'proposal_not_found');
+      content=editor?editorPage(site,source!,url.searchParams.get('path'),token,crypto.randomUUID(),editable):articleList(site,source,editable,!!ibisOrigin);
+    }
   }
-  return page(env,site.title,shell(site,view,content,token,env.PUBLIC_ORIGIN,proposals.filter(p=>p.state==='submitted').length),browser);
+  return page(env,site.title,shell(site,view,content,token,env.PUBLIC_ORIGIN,proposals.filter(p=>p.state==='submitted').length),browser,200,extraCsp);
 }
 
 export default {
@@ -199,13 +213,42 @@ export default {
         const session = await requireSession(request, env, true);
         return json(env, { active: true, lease_until: session.lease_until });
       }
+      const officeBlobMatch = /^\/api\/sites\/([^/]+)\/office\/blob$/.exec(url.pathname);
+      if (officeBlobMatch && SITE_ID.test(officeBlobMatch[1]) && (request.method === "GET" || request.method === "OPTIONS")) {
+        const ibisOrigin = ibisOfficeOrigin(env);
+        if (!ibisOrigin) fail(404, "not_found");
+        if (request.method === "OPTIONS") {
+          const headers = baseHeaders(env);
+          headers.set("Access-Control-Allow-Origin", ibisOrigin);
+          headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+          headers.set("Vary", "Origin");
+          return new Response(null, { status: 204, headers });
+        }
+        const tokenParam = url.searchParams.get("token") ?? "";
+        const claims = await verifyOfficeBlobToken(env, tokenParam, officeBlobMatch[1]);
+        const headers = baseHeaders(env);
+        headers.set("Access-Control-Allow-Origin", ibisOrigin);
+        headers.set("Vary", "Origin");
+        const fileName = claims.path.slice(claims.path.lastIndexOf("/") + 1).replace(/["\\\r\n]/g, "_");
+        headers.set("Content-Disposition", `inline; filename="${fileName}"`);
+        if (claims.path.endsWith(".md")) {
+          const ws = await workspace(env, claims.siteId, claims.proposalId);
+          const md = ws.articles.find((entry) => entry.path === claims.path);
+          if (!md) fail(404, "article_not_found");
+          headers.set("Content-Type", "text/markdown; charset=utf-8");
+          return new Response(md.text, { status: 200, headers });
+        }
+        const upstream = await fetchOfficeFile(env, claims.siteId, claims.proposalId, claims.path);
+        headers.set("Content-Type", upstream.headers.get("Content-Type") ?? "application/octet-stream");
+        return new Response(upstream.body, { status: 200, headers });
+      }
       const session = await requireSession(request, env);
       if (request.method === "GET" && url.pathname === "/api/sites") return json(env, { sites: await listSites(env, session.sub) });
       const match = /^\/(api\/)?sites\/([^/]+)(.*)$/.exec(url.pathname);
       if (!match || !SITE_ID.test(match[2])) fail(404, "not_found");
       const [, api, siteId, tail] = match;
       if (String(env.ADMIN_MODE) === "inquiries" && tail && !/^\/inquiries(?:\/[0-9a-f-]+)?$/.test(tail)) fail(404,"not_found");
-      if (!api && (!tail || tail === "/editor") && request.method === "GET") return await sitePage(request, env, session, siteId);
+      if (!api && (!tail || tail === "/editor" || tail === "/office") && request.method === "GET") return await sitePage(request, env, session, siteId);
       const site = await getSite(env, siteId, session.sub);
       if (api && !tail && request.method === "GET") return json(env, await siteDetails(env, site));
       if (api && tail === "/audit" && request.method === "GET") {
@@ -213,9 +256,9 @@ export default {
         const audit = await env.DB.withSession("first-primary").prepare("SELECT * FROM admin_operation WHERE site_id=? ORDER BY created_at DESC,id LIMIT 100").bind(siteId).all();
         return json(env, { operations: audit.results });
       }
-      if(api && request.method==='POST' && (tail==='/editor' || tail==='/editor/rebuild')) {
-        const value=await body(request,env,MAX_DRAFT_REQUEST), rebuild=tail.endsWith('/rebuild');
-        const allowed=['operationId','revision','proposalId',...(rebuild?[]:['path','title','body','timestamp'])];
+      if(api && request.method==='POST' && (tail==='/editor' || tail==='/editor/rebuild' || tail==='/office')) {
+        const isOffice=tail==='/office', value=await body(request,env,isOffice?MAX_OFFICE_DRAFT_REQUEST:MAX_DRAFT_REQUEST), rebuild=tail.endsWith('/rebuild');
+        const allowed=['operationId','revision','proposalId',...(rebuild?[]:isOffice?['path','base64']:['path','title','body','timestamp'])];
         if(Object.keys(value).some(key=>!allowed.includes(key))) fail(400,'unknown_field');
         const operation=input({operationId:value.operationId,revision:value.revision,commit:'0'.repeat(40),message:'原稿を更新'},'proposal.submit');
         if(typeof value.proposalId!=='string' || !UUID.test(value.proposalId)) fail(400,'invalid_operation');
@@ -224,7 +267,7 @@ export default {
         const source=await workspace(env,site.id,value.proposalId);
         const saved=rebuild?{draft:source.changes.length?contentDraft({schema:1,repository:source.repositoryId,changes:source.changes}):undefined,
           message:await env.DB.withSession('first-primary').prepare('SELECT message FROM proposal WHERE id=? AND site_id=?').bind(value.proposalId,site.id).first<string>('message')??'プレビューを作り直す'}:
-          await editorDraft(source,value);
+          isOffice?await officeDraft(source,value,{actor:`human:${fresh.sub}`}):await editorDraft(source,value,{actor:`human:${fresh.sub}`});
         const result=await mutate(env,fresh,site,'proposal.submit',{...operation,commit:source.commit,...saved});
         ctx.waitUntil(enqueueBuilds(env).catch(()=>console.error(JSON.stringify({event:'build_outbox_send_failed'}))));
         return json(env,{proposal_id:operation.operationId,site_revision:result.operation.site_revision+1,replay:result.replay},result.replay?200:201);
@@ -269,7 +312,7 @@ export default {
         const draft=contentDraft(JSON.parse(row.payload));
         if (await draftDigest(draft)!==row.digest || row.digest!==row.draft_digest || draft.repository!==row.expected_repository_id) fail(503,'draft_integrity_error');
         if (api) return json(env,{commit:row.commit_id,digest:row.digest,...draft});
-        return page(env,'原稿変更案',`<p>基準コミット：<code>${escape(row.commit_id)}</code></p><p>この変更案は基準コミットに重ねてビルドされます。プレビューを確認してから公開してください。</p>${draft.changes.map(change=>`<section><h2>${escape(change.path)}</h2><p>${change.before===null?'新規作成':change.text===null?'削除':'置換'}</p>${change.text===null?'':`<pre>${escape(change.text)}</pre>`}</section>`).join('')}<p><a href="/sites/${site.id}">管理画面に戻る</a></p>`);
+        return page(env,'原稿変更案',`<p>基準コミット：<code>${escape(row.commit_id)}</code></p><p>この変更案は基準コミットに重ねてビルドされます。プレビューを確認してから公開してください。</p>${draft.changes.map(change=>`<section><h2>${escape(change.path)}</h2><p>${change.before===null?'新規作成':(change.text===null&&change.base64===undefined)?'削除':'置換'}</p>${change.base64!==undefined?`<p>Office バイナリ文書（Base64 ${change.base64.length} 文字）</p>`:change.text===null?'':`<pre>${escape(change.text)}</pre>`}</section>`).join('')}<p><a href="/sites/${site.id}">管理画面に戻る</a></p>`);
       }
       if (!api || request.method !== "POST") fail(404, "not_found");
       const previewRoute = /^\/proposals\/([0-9a-f-]+)\/preview$/.exec(tail);
