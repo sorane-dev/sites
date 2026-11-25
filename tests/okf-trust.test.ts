@@ -5,11 +5,13 @@ import {
   deriveTrustTier,
   isCurrentVerification,
   isOkfDotPath,
+  isOkfNonConceptReservedFile,
   isReservedOkfFilename,
   isStableStatus,
   isStale,
   normalizeConcept,
   parseTrustFields,
+  patchFrontmatterScalar,
   resolveOkfPath,
   validateSource,
 } from "../packages/okf/src/index.ts";
@@ -322,5 +324,49 @@ describe("OKF v0.2 trust fields", () => {
       resolved: "metrics/tables/orders.md",
       fragment: undefined,
     });
+
+    // ibisOffice parity: percent-decoding, query strip, scheme-relative, traversal/dot rejection
+    expect(resolveOkfPath("../a%20b.md?view=1#heading", "nested/note.md")).toEqual({
+      kind: "bundle",
+      resolved: "a b.md",
+      fragment: "heading",
+    });
+    expect(resolveOkfPath("#only-fragment", "nested/note.md")).toEqual({
+      kind: "bundle",
+      resolved: "nested/note.md",
+      fragment: "only-fragment",
+    });
+    expect(resolveOkfPath("//example.com/a.md", "nested/note.md").kind).toBe("uri");
+    for (const invalid of ["/%2e%2e/a.md", "/a%2fb.md", "/.hidden/a.md", "/bad%ZZ.md"]) {
+      expect(resolveOkfPath(invalid, "nested/note.md").kind).toBe("external");
+    }
+
+    // Non-concept reserved files (log.md at any level, frontmatter-less subdir index.md)
+    expect(isOkfNonConceptReservedFile("log.md", "# Log\n")).toBe(true);
+    expect(isOkfNonConceptReservedFile("sub/log.md", "# Log\n")).toBe(true);
+    expect(isOkfNonConceptReservedFile("sub/index.md", "# Sub\n")).toBe(true);
+    expect(
+      isOkfNonConceptReservedFile("sub/index.md", "---\ntype: index\ntitle: Sub\n---\n"),
+    ).toBe(false);
+    expect(isOkfNonConceptReservedFile("index.md", "# Root\n")).toBe(false);
+  });
+
+  test("OKF v0.3 §4: patchFrontmatterScalar preserves comments, order, and x-ibis-* keys", () => {
+    const raw = [
+      "# ibisOffice managed",
+      "type: article",
+      "title: Old Title # inline comment",
+      "x-ibis-format: document",
+      "verified: { by: 'human:alice', at: '2026-06-25T09:00:00Z' }",
+    ].join("\n");
+    const patched = patchFrontmatterScalar(raw, "title", "New: Title");
+    expect(patched).not.toBe(null);
+    expect(patched!).toContain("# ibisOffice managed");
+    expect(patched!).toContain("title: 'New: Title' # inline comment");
+    expect(patched!).toContain("x-ibis-format: document");
+    expect(patched!).toContain("verified: { by: 'human:alice', at: '2026-06-25T09:00:00Z' }");
+
+    // Multiline block scalar safely returns null to allow fallback
+    expect(patchFrontmatterScalar("type: article\ntitle: |\n  Multi\n", "title", "X")).toBe(null);
   });
 });

@@ -11,6 +11,7 @@ import {
   buildBundleEntries,
   buildBundleRootIndex,
   isBuildableContentType,
+  isOkfNonConceptReservedFile,
   resolveEffectiveType,
   packOkfcFromIr,
   buildKnowledgeIr,
@@ -444,11 +445,16 @@ export async function runBuild(opts: BuildOptions): Promise<BuildResult> {
 
   const mdFiles = walkMarkdown(contentDir);
   const parsed: ParsedConcept[] = [];
+  const reservedFiles: Array<{ rel: string; source: string }> = [];
   let errors = 0;
 
   for (const abs of mdFiles) {
     const rel = relative(contentDir, abs);
     const source = readFileSync(abs, "utf8");
+    if (isOkfNonConceptReservedFile(rel, source)) {
+      reservedFiles.push({ rel: rel.replace(/\\/g, "/"), source });
+      continue;
+    }
     const p = parseConcept(abs, rel, source, okfOpts);
     parsed.push(p);
     if (!p.validation.ok) {
@@ -1147,7 +1153,9 @@ export async function runBuild(opts: BuildOptions): Promise<BuildResult> {
     siteEntries.push({ url: termsIndexRel, lastmod: undefined, isIndex: false });
   }
 
-  const directoryIndexes = discoverDirectoryIndexes(parsed, config, i18n);
+  const directoryIndexes = discoverDirectoryIndexes(parsed, config, i18n, {
+    reservedRelPaths: reservedFiles.map((f) => f.rel),
+  });
   const directoryIndexBundleRows: Array<{ path: string; content: string }> = [];
   for (const spec of directoryIndexes) {
     const outRel = directoryIndexOutRel(spec);
@@ -1881,13 +1889,17 @@ export async function runBuild(opts: BuildOptions): Promise<BuildResult> {
     description: config.site.description,
     license: config.site.open_data?.default_license,
   });
+  const reservedBundlePaths = new Set(reservedFiles.map((f) => f.rel));
   const bundleEntries = [
     rootIndexEntry,
     ...conceptBundleEntries,
-    ...directoryIndexBundleRows.map((row) => ({
-      path: row.path,
-      content: row.content,
-    })),
+    ...reservedFiles.map((f) => ({ path: f.rel, content: f.source })),
+    ...directoryIndexBundleRows
+      .filter((row) => !reservedBundlePaths.has(row.path))
+      .map((row) => ({
+        path: row.path,
+        content: row.content,
+      })),
   ].sort((a, b) => a.path.localeCompare(b.path));
   if (buildOutputs.okf_bundle) {
     writeFileSync(join(outDir, "okf/bundle.tar.gz"), gzipSync(tarBytes(bundleEntries)));

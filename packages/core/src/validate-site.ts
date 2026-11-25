@@ -1,6 +1,13 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { extract, parseConcept, parseYaml, validateSource, type ValidationIssue } from "@sorane/okf";
+import {
+  extract,
+  isOkfNonConceptReservedFile,
+  parseConcept,
+  parseYaml,
+  validateSource,
+  type ValidationIssue,
+} from "@sorane/okf";
 import type { SoraneConfig } from "./config.ts";
 import { buildGlossaryLinkIndex } from "./markup/glossary-link-index.ts";
 import { validateTermLinkWarnings } from "./markup/validate-term-links.ts";
@@ -146,6 +153,7 @@ export function validateSiteContent(
   const okfOpts = okfValidateOptions(config);
   const files: ValidateFileReport[] = [];
   const i18nEntries: Array<{ rel: string; source: string }> = [];
+  const reservedEntries: Array<{ rel: string; source: string }> = [];
   let errorCount = 0;
   let warningCount = 0;
   const i18n = resolveI18nContext(config.site);
@@ -156,7 +164,23 @@ export function validateSiteContent(
   for (const abs of walkMarkdown(contentDir)) {
     const rel = relative(contentDir, abs);
     const source = readFileSync(abs, "utf8");
+    if (isOkfNonConceptReservedFile(rel, source)) {
+      reservedEntries.push({ rel, source });
+      continue;
+    }
     i18nEntries.push({ rel, source });
+  }
+
+  for (const { rel, source } of reservedEntries) {
+    const findings: ValidateFinding[] = [];
+    const base = rel.replace(/\\/g, "/").split("/").pop() ?? rel;
+    if (base === "log.md" && extract(source).frontmatter !== null) {
+      findings.push(
+        warningToFinding("okf", "okf: log.md should not have frontmatter (OKF v0.3 §9)"),
+      );
+      warningCount++;
+    }
+    files.push({ file: rel, ok: true, findings });
   }
 
   const glossaryLinkIndex = buildGlossaryLinkIndex(
@@ -230,7 +254,9 @@ export function validateSiteContent(
         }
       }
       if (result.type === "dataset") {
-        for (const w of validateDatasetWarnings(fm)) {
+        for (const w of validateDatasetWarnings(fm, {
+          staticDir: config.build.static_dir ? resolve(cwd, config.build.static_dir) : undefined,
+        })) {
           findings.push(warningToFinding("dataset", w));
           warningCount++;
         }
@@ -285,7 +311,9 @@ export function validateSiteContent(
   const parsedConcepts = i18nEntries.map((e) =>
     parseConcept("", e.rel, e.source, okfOpts),
   );
-  for (const spec of discoverDirectoryIndexes(parsedConcepts, config, i18n)) {
+  for (const spec of discoverDirectoryIndexes(parsedConcepts, config, i18n, {
+    reservedRelPaths: reservedEntries.map((e) => e.rel),
+  })) {
     files.push({
       file: `${spec.dirRel}/`,
       ok: true,

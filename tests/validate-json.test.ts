@@ -62,6 +62,42 @@ describe("validateSiteContent", () => {
     assert.ok(file?.findings.some((f) => f.severity === "warning" && f.category === "okf"));
   });
 
+  test("OKF v0.3 reserved log.md and frontmatter-less subdir index.md are accepted without error", () => {
+    const root = mkdtempSync(join(tmpdir(), "sorane-validate-reserved-"));
+    const contentDir = join(root, "content");
+    mkdirSync(join(contentDir, "metrics"), { recursive: true });
+    writeFileSync(
+      join(contentDir, "log.md"),
+      "# Update Log\n\n## 2026-11-25\n* **Creation**: Initialized.\n",
+      "utf8",
+    );
+    writeFileSync(
+      join(contentDir, "metrics", "index.md"),
+      "# Metrics\n\n* [A](a.md) - metric a\n* [B](b.md) - metric b\n",
+      "utf8",
+    );
+    writeFileSync(
+      join(contentDir, "metrics", "a.md"),
+      "---\ntype: article\ntitle: A\nprofile: sorane-okf/0.3\n---\n\nBody A.\n",
+      "utf8",
+    );
+    writeFileSync(
+      join(contentDir, "metrics", "b.md"),
+      "---\ntype: article\ntitle: B\nprofile: sorane-okf/0.3\n---\n\nBody B.\n",
+      "utf8",
+    );
+    const report = validateSiteContent(
+      root,
+      mergeConfig({ build: { content_dir: "content" } } as Partial<SoraneConfig>),
+    );
+    assert.equal(report.ok, true);
+    assert.equal(report.error_count, 0);
+    assert.equal(report.files.find((f) => f.file === "log.md")?.ok, true);
+    assert.equal(report.files.find((f) => f.file === "metrics/index.md")?.ok, true);
+    // Author frontmatter-less metrics/index.md suppresses auto-directory-index warning
+    assert.equal(report.files.some((f) => f.file === "metrics/"), false);
+  });
+
   test("heading warnings are categorized", () => {
     const root = mkdtempSync(join(tmpdir(), "sorane-validate-"));
     const contentDir = join(root, "content");
