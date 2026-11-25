@@ -51,16 +51,36 @@ export {
 export {
   parseTrustFields,
   deriveTrustTier,
+  isCurrentVerification,
+  currentVerifications,
+  isStableStatus,
   isStale,
+  isAbsentOkfValue,
+  isOkfTimestamp,
+  isRfc3339Date,
+  isRfc3339DateTime,
+  parseOkfTimestampMs,
   TRUST_FRONTMATTER_KEYS,
+  type KnownOkfConceptStatus,
   type TrustParseResult,
 } from "./trust.ts";
+export {
+  OKF_RESERVED_FILENAMES,
+  isReservedOkfFilename,
+  isOkfDotPath,
+  resolveOkfPath,
+  type ResolvedOkfPath,
+  type ResolveOkfPathOptions,
+} from "./path.ts";
 export { parseConcept, type ParsedConcept } from "./parse.ts";
 export {
+  OKF_SPEC_VERSION,
   buildBundleEntries,
+  buildBundleRootIndex,
   buildOkfBundle,
   type BundleConcept,
   type BundleEntry,
+  type BundleMetadata,
 } from "./bundle.ts";
 export {
   OKFC_SCHEMA_VERSION,

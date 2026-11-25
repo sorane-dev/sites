@@ -308,6 +308,7 @@ function articleMetaHtml(opts: {
   author?: string;
   status?: string;
   trustTier?: string;
+  supersededBy?: string;
   staleAfter?: string;
   generatedBy?: string;
   lang?: string;
@@ -341,6 +342,11 @@ function articleMetaHtml(opts: {
     parts.push(
       `<span class="article-status article-status--${escapeHtml(opts.status)}">${escapeHtml(label)}</span>`,
     );
+    if (opts.status === "deprecated" && opts.supersededBy) {
+      parts.push(
+        `<span class="article-superseded-by" title="superseded_by">${ja ? "後継" : "superseded by"}: ${escapeHtml(opts.supersededBy)}</span>`,
+      );
+    }
   }
   if (opts.trustTier && opts.trustTier !== "unverified") {
     const label =
@@ -372,7 +378,8 @@ function articleMetaHtml(opts: {
 function trustMetaFromConcept(concept: OkfConcept, lang?: string) {
   return {
     status: concept.status,
-    trustTier: deriveTrustTier(concept.verified),
+    supersededBy: concept.superseded_by,
+    trustTier: deriveTrustTier(concept.verified, concept.generated),
     staleAfter: concept.stale_after,
     generatedBy: concept.generated?.by,
     lang,

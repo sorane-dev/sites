@@ -67,12 +67,13 @@ describe("buildCatalogJsonLd", () => {
     expect(json).not.toContain('"hasPart": [\n    {\n      "@type": "Dataset"');
   });
 
-  test("OKF v0.2 trust を keywords / citation に載せる", () => {
+  test("OKF v0.3 trust / lifecycle を keywords / citation に載せる（古い verified は降格）", () => {
     const concept = normalizeConcept(
       {
         type: "article",
         title: "Orders",
         status: "deprecated",
+        superseded_by: "/metrics/orders-v2.md",
         stale_after: "2026-12-31T00:00:00Z",
         generated: { by: "agent/1", at: "2026-06-20T22:53:05Z" },
         verified: { by: "human:alice", at: "2026-06-25T09:00:00Z" },
@@ -88,10 +89,29 @@ describe("buildCatalogJsonLd", () => {
     );
     expect(json).toContain("trust:human-reviewed");
     expect(json).toContain("status:deprecated");
+    expect(json).toContain("superseded_by:/metrics/orders-v2.md");
     expect(json).toContain("stale_after:2026-12-31T00:00:00Z");
     expect(json).toContain("generated_by:agent/1");
     expect(json).toContain("https://wiki.example/schema");
     expect(json).toContain('"@type": "CreativeWork"');
+
+    // OKF v0.3 §5.3: human review older than generated.at must not emit trust:human-reviewed
+    const rewritten = normalizeConcept(
+      {
+        type: "article",
+        title: "Rewritten",
+        generated: { by: "agent/2", at: "2026-07-01T00:00:00Z" },
+        verified: { by: "human:alice", at: "2026-06-25T09:00:00Z" },
+      },
+      "body",
+      "rewritten",
+    );
+    const rewrittenJson = buildCatalogJsonLd(
+      [{ slug: "rewritten", url: "https://ex.dev/rewritten.html", concept: rewritten }],
+      "Site",
+      "https://ex.dev",
+    );
+    expect(rewrittenJson).not.toContain("trust:human-reviewed");
   });
 
   test("docsMode では article を TechArticle にする", () => {

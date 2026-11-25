@@ -130,13 +130,13 @@ export function discoverDirectoryIndexes(
   );
 }
 
-/** OKF bundle 向け: frontmatter 無しディレクトリ `index.md`。 */
+/** OKF bundle 向け: frontmatter 無しディレクトリ `index.md`（OKF v0.3 §6 バンドルルート相対パス）。 */
 export function directoryIndexOkfMarkdown(spec: DirectoryIndexSpec): string {
   const title = humanizeDirectoryLabel(spec.dirRel);
   const lines = [`# ${title}`, ""];
   for (const e of spec.entries) {
     const desc = e.description ? ` — ${e.description}` : "";
-    lines.push(`- [${e.title}](${e.type}/${e.slug}.md)${desc}`);
+    lines.push(`- [${e.title}](/${e.type}/${e.slug}.md)${desc}`);
   }
   return `${lines.join("\n")}\n`;
 }

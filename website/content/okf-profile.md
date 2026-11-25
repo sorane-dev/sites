@@ -5,16 +5,17 @@ profile: sorane-okf/0.1
 excludeFromList: true
 ---
 
-空音は [Open Knowledge Format (OKF) v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)（[発表](https://cloud.google.com/blog/products/data-analytics/okf-v0-2-adds-trust-signals)）をベースに実装します。各ページの frontmatter に `profile: sorane-okf/<version>` を書き、JSON Schema で検証します。
+空音は [Open Knowledge Format (OKF) v0.3](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md) をベースに実装します。各ページの frontmatter に `profile: sorane-okf/<version>` を書き、JSON Schema で検証します。
 
-### 名前の注意: `sorane-okf/0.2` ≠ OKF v0.2
+### 名前の注意: `sorane-okf/0.x` ≠ OKF v0.x
 
 | 名前 | 意味 |
 |------|------|
-| **OKF v0.2** | 上流仕様（trust / provenance / lifecycle / attestation） |
+| **OKF v0.3** | 上流仕様（trust / provenance / lifecycle / attestation / bundle メタデータ） |
 | **`sorane-okf/0.2`** | 空音のプロファイル版（記事型 + [AI 開示](ai-disclosure.html) の厳密検証） |
+| **`sorane-okf/0.3`** | 空音のプロファイル版（拡張型・オープンデータ + AI 開示の厳密検証） |
 
-OKF v0.2 の trust 系フィールド（`generated`, `verified`, `sources`, `status`, `stale_after`）は **すべての** `sorane-okf/0.x` で任意に使えます。`timestamp` が無い場合は `generated.at` を内容日時として使います（OKF §13.1）。
+OKF v0.3 の trust / lifecycle 系フィールド（`generated`, `verified`, `sources`, `status`, `superseded_by`, `stale_after`）は **すべての** `sorane-okf/0.x` で任意に使えます。`timestamp` が無い場合は `generated.at` を内容日時として使います（OKF Appendix B.1）。
 
 ## サポートする concept 型
 
@@ -49,20 +50,21 @@ frontmatter の `profile` で、検証の厳しさと使える `type` を選び�
 
 `sorane.yaml` の `okf.default_profile` でサイト全体の既定プロファイルを指定できます（各ページの `profile:` は省略可能）。`okf.unknown_type` で 0.3 の未知 `type` を `warn`（既定）か `error` に切り替えられます。詳細は [設定](configuration.html#okf-サイト既定okf) を参照してください。
 
-## OKF v0.2 trust フィールド（任意）
+## OKF v0.3 trust / lifecycle フィールド（任意）
 
 | フィールド | 用途 |
 |------------|------|
-| `generated: { by, at }` | 誰が・いつ書いたか（`at` はタイムゾーン付き ISO 8601 日時。`timestamp` の代替可） |
-| `verified: { by, at }` またはリスト | 確認イベント（各イベントに `at` 必須）。`human:` 接頭辞 → trust tier **human-reviewed** |
-| `sources[]` | 由来（各要素に `resource` 必須。任意で `id`, `title`, `author`, `usage_count`, `last_modified`。日時値はタイムゾーン付き ISO 8601） |
-| `usage_window: { from, to }` | `usage_count` の集計期間（日時はタイムゾーン付き ISO 8601） |
-| `status` | `draft` \| `stable` \| `deprecated`（省略 = stable） |
-| `stale_after` | 鮮度期限（タイムゾーン付き ISO 8601 日時。経過後は `validate` が warning） |
+| `generated: { by, at }` | 誰が・いつ書いたか（`at` は RFC 3339 の日時または `YYYY-MM-DD`。`timestamp` の代替可） |
+| `verified: { by, at }` またはリスト | 確認イベント（各イベントに `by`, `at` 必須）。`at >= generated.at`（または `generated` 省略時）の現行イベントのみが trust tier に反映され、`human:` 接頭辞 → **human-reviewed**、それ以外（`team:`, `process:`, `producer/version`） → **machine-confirmed** |
+| `sources[]` | 由来（単一マッピングもリストとして受理。各要素に `resource` 必須。任意で `id`, `title`, `author`, `usage_count`, `last_modified`。日時は RFC 3339 日時または `YYYY-MM-DD`） |
+| `usage_window: { from, to }` | `usage_count` の集計期間（日時は RFC 3339 日時または `YYYY-MM-DD`） |
+| `status` | `draft` \| `stable` \| `deprecated`（省略 = `stable`。未知の値は warning を出してそのまま保持し、非 `stable` 扱い） |
+| `superseded_by` | 後継コンセプトへのパスまたは URI（`status: deprecated` と併用） |
+| `stale_after` | 鮮度期限（RFC 3339 日時または `YYYY-MM-DD`＝その日の UTC 00:00:00Z。経過後は `validate` が warning） |
 
-Actor 表記: `producer/version`（エージェント）、`human:<id>`、`process:<id>`。
+Actor 表記: `producer/version`（エージェント）、`human:<id>`、`team:<id>`、`process:<id>`。
 
-HTML の記事メタ・`catalog.jsonld` の keywords（`trust:`, `status:`, …）・OKF bundle に伝播します。`type: Attested Computation` と runtime 実行は未実装です（0.3 では未知 type として warning + article 扱い）。
+HTML の記事メタ・`catalog.jsonld` の keywords（`trust:`, `status:`, `superseded_by:`, …）・OKF bundle（ルート `index.md` に `okf_version: "0.3"` を出力）に伝播します。`type: Attested Computation` と runtime 実行は未実装です（0.3 では未知 type として warning + article 扱い）。
 
 ## 記事の例
 

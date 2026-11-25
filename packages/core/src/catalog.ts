@@ -61,7 +61,7 @@ function applyAiDisclosure(
   }
 }
 
-/** OKF v0.2 trust / lifecycle signals as catalog keywords (+ dateModified from generated). */
+/** OKF v0.3 trust / lifecycle signals as catalog keywords (+ dateModified from generated). */
 function applyOkfTrustSignals(
   target: Record<string, unknown>,
   concept: OkfConcept,
@@ -69,8 +69,9 @@ function applyOkfTrustSignals(
   const kw = (target.keywords as string[] | undefined) ?? [];
   const extra: string[] = [];
   if (concept.status) extra.push(`status:${concept.status}`);
+  if (concept.superseded_by) extra.push(`superseded_by:${concept.superseded_by}`);
   if (concept.stale_after) extra.push(`stale_after:${concept.stale_after}`);
-  const tier = deriveTrustTier(concept.verified);
+  const tier = deriveTrustTier(concept.verified, concept.generated);
   if (tier !== "unverified") extra.push(`trust:${tier}`);
   if (concept.generated?.by) extra.push(`generated_by:${concept.generated.by}`);
   if (extra.length > 0) {

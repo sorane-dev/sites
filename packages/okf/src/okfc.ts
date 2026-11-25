@@ -12,7 +12,7 @@ import { chunkProseMarkdown } from "./chunk-prose.ts";
 import { chunkConceptBody } from "./chunk-concept.ts";
 
 export const OKFC_SCHEMA_VERSION = 1;
-export const OKFC_OKF_VERSION = "0.2";
+export const OKFC_OKF_VERSION = "0.3";
 export const OKFC_PACK_TOOL = "tool:sorane/okfc-pack@0.5";
 
 /** SQLite DDL for the FTS-only Definition Profile OKFC file. */
@@ -174,6 +174,7 @@ export function conceptFrontmatterJson(concept: OkfConcept): Record<string, unkn
   if (concept.tags && concept.tags.length > 0) out.tags = [...concept.tags];
   if (concept.profile) out.profile = concept.profile;
   if (concept.status) out.status = concept.status;
+  if (concept.superseded_by) out.superseded_by = concept.superseded_by;
   if (concept.stale_after) out.stale_after = concept.stale_after;
   if (concept.generated) out.generated = { ...concept.generated };
   if (concept.verified && concept.verified.length > 0) {

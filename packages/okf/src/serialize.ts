@@ -10,6 +10,7 @@ const KEY_ORDER = [
   "tags",
   "profile",
   "status",
+  "superseded_by",
   "stale_after",
   "generated",
   "verified",
@@ -54,13 +55,31 @@ function appendDateRangeInline(range: OkfDateRange): string {
   const parts: string[] = [];
   if (range.from) parts.push(`from: ${formatScalar(range.from)}`);
   if (range.to) parts.push(`to: ${formatScalar(range.to)}`);
+  for (const [k, v] of Object.entries(range)) {
+    if (k === "from" || k === "to" || v === undefined) continue;
+    parts.push(`${k}: ${formatScalar(v)}`);
+  }
   return `{ ${parts.join(", ")} }`;
 }
 
 function appendActorInline(ev: OkfActorEvent): string {
   const parts = [`by: ${formatScalar(ev.by)}`, `at: ${formatScalar(ev.at)}`];
+  for (const [k, v] of Object.entries(ev)) {
+    if (k === "by" || k === "at" || v === undefined) continue;
+    parts.push(`${k}: ${formatScalar(v)}`);
+  }
   return `{ ${parts.join(", ")} }`;
 }
+
+const SOURCE_KNOWN_KEYS = new Set([
+  "resource",
+  "id",
+  "title",
+  "author",
+  "usage_count",
+  "last_modified",
+  "usage_window",
+]);
 
 function appendSources(
   lines: string[],
@@ -78,6 +97,10 @@ function appendSources(
     if (s.last_modified) lines.push(`    last_modified: ${formatScalar(s.last_modified)}`);
     if (s.usage_window) {
       lines.push(`    usage_window: ${appendDateRangeInline(s.usage_window)}`);
+    }
+    for (const [k, v] of Object.entries(s)) {
+      if (SOURCE_KNOWN_KEYS.has(k) || v === undefined) continue;
+      lines.push(`    ${k}: ${formatScalar(v)}`);
     }
   }
 }
@@ -151,6 +174,7 @@ export function toOkfFrontmatterLines(concept: OkfConcept): string[] {
   if (concept.profile) lines.push(`profile: ${formatScalar(concept.profile)}`);
 
   if (concept.status) lines.push(`status: ${formatScalar(concept.status)}`);
+  if (concept.superseded_by) lines.push(`superseded_by: ${formatScalar(concept.superseded_by)}`);
   if (concept.stale_after) lines.push(`stale_after: ${formatScalar(concept.stale_after)}`);
 
   if (concept.generated) {
